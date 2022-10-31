@@ -18,6 +18,46 @@
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
     /* Fill this in */
+    /* TODO this function needs to be completed */
+    struct sr_arpcache cache = sr -> cache;
+    struct sr_arpreq * head = sr -> cache.requests;
+    while (head != NULL) {
+        /* retieve req and setup for next iter */
+        struct sr_arpreq * req = head;
+        uint32_t ip = req -> ip;
+        head = head -> next;
+
+        struct sr_arpentry * cached_value = sr_arpcache_lookup(&cache, ip);
+
+        /* did not found match in table*/
+        if (cached_value == NULL) {
+
+        } else { /* found match in table */
+
+        }
+
+    } 
+
+}
+
+void handle_arpreq(struct sr_arpreq * req) {
+    time_t time_now = time(NULL);
+    if (difftime(time_now, req -> sent) > 1.0) {
+        if (req -> times_sent >= 5) {
+            /* TODO 
+            send icmp host unreachable to source addr of all pkts waiting
+                on this request
+            arpreq_destroy(req)
+            */
+        }
+        else {
+            /*
+            send arp request
+            req->sent = now
+            req->times_sent++
+            */
+        }
+    }
 }
 
 /* You should not need to touch the rest of this code. */
@@ -244,4 +284,3 @@ void *sr_arpcache_timeout(void *sr_ptr) {
     
     return NULL;
 }
-
