@@ -29,6 +29,7 @@
 
 struct sr_rt
 {
+    /* IN NETWORK BYTE ORDER */
     struct in_addr dest;
     struct in_addr gw;
     struct in_addr mask;

@@ -89,12 +89,16 @@ void sr_handlepacket(struct sr_instance* sr,
     sr_handle_ip_packet(sr, packet, len, interface);
   } else if (ethernet_header->ether_type == htons(ethertype_arp)
     && len >= sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t)) {
-    sr_handle_arp_packet(sr, packet, len, interface);
+    /* TODO handle ARP sr_handle_arp_packet(sr, packet, len, interface);*/
   } else {
     /* TODO not ip or arp */
   }
 }/* end sr_ForwardPacket */
 
+/*-------------------------------------------------
+ * One should make sure that the packet is indeed an IP packet before calling
+ *
+ *------------------------------------------------*/
 void sr_handle_ip_packet(struct sr_instance* sr /*lent*/,
   uint8_t* packet /*lent*/,
   unsigned int len,
@@ -108,42 +112,53 @@ void sr_handle_ip_packet(struct sr_instance* sr /*lent*/,
     return;
   }
 
-  /* TODO replace vvv this with getting own IP address*/
-  struct sr_if* if_router = sr_get_interface(sr, interface);
-  uint16_t router_ip = if_router->ip;
+  uint32_t dest_ip_n = ip_header->ip_dst;
+  uint32_t dest_ip_h = ntohl(ip_header->ip_dst);
 
-  if (router_ip == ip_header->ip_dst) { /* TODO this needs testing, do we need to htonl / ntohl? */
-    /* TODO packet meant for router, handle it*/
-  } else {
-    /* TODO packet not meant for router, forward it*/
-
-    /* validate TTL */
-    if (ip_header->ip_ttl == 0) {
-      /* TODO TTL error */
-      return;
-    }
-
-    uint32_t dest_ip = ip_header->ip_dst;
-
-    /* find routing table match */
-    struct sr_rt* rt_entry = longest_prefix_match(sr, dest_ip);
-    if (rt_entry == NULL) {
-      /* TODO send ICMP host unreachable*/
-      return;
-    } else {
-      /* TODO check ARP */
-   
-      /* TODO update TTL and checksum */
-
-      /* TODO forward packet*/
-    }
+  /* Get interface IP address */
+  struct sr_if* receiving_interface = sr_get_interface(sr, interface);
+  if (receiving_interface->ip == dest_ip_h) {
+    /* TODO packet is for the router, handle it */
+    return;
   }
+
+  /* TODO packet not meant for router, forward it*/
+
+  /* validate TTL */
+  if (ip_header->ip_ttl == 0) {
+    /* TODO TTL error */
+    return;
+  }
+
+  /* find routing table match */
+  struct sr_rt* rt_entry = longest_prefix_match(sr, dest_ip_n);
+  if (rt_entry == NULL) {
+    /* TODO send ICMP host unreachable*/
+    return;
+  }
+
+  /* TODO check ARP */
+  struct sr_arpentry* arp_entry = sr_arpcache_lookup(&sr->cache, dest_ip_n);
+  if (arp_entry == NULL) {
+    /* TODO did not find matching ARP MAC address*/
+    return;
+  }
+
+  /* TODO update eth header and checksum */
+  sr_ethernet_hdr_t * packet_as_eth = (sr_ethernet_hdr_t *)packet;
+
+
+  /* TODO update TTL and checksum */
+  sr_ip_hdr_t * packet_as_ip = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+
+  /* TODO forward packet */
+  
+
 }
 
 void decrement_ttl(sr_ip_hdr_t* ip_header) {
   ip_header->ip_ttl--;
   /* TODO update checksum*/
-
 }
 
 /*---------------------
@@ -155,8 +170,10 @@ void decrement_ttl(sr_ip_hdr_t* ip_header) {
 uint8_t validate_ip_checksum(sr_ip_hdr_t* ip_header) {
   uint32_t sum = 0;
   uint16_t* address = ip_header;
-  for (int i = 0; i < 10; i++) {
+  int i = 0;
+  for (; i < 10; i++) {
     sum += *address;
+    address++;
   }
   while (sum >> 16) {
     sum = (sum & 0xFFFF) + (sum >> 16);
@@ -164,12 +181,13 @@ uint8_t validate_ip_checksum(sr_ip_hdr_t* ip_header) {
   return ~sum;
 }
 
-struct sr_rt* longest_prefix_match(struct sr_instance* sr /*lent*/, uint32_t dest_ip /*lent*/) {
+struct sr_rt* longest_prefix_match(struct sr_instance* sr /*lent*/,
+  uint32_t dest_ip_n /*lent, in network byte order */) {
   struct sr_rt* table_entry = sr->routing_table;
   struct sr_rt* longest_entry = NULL;
   uint32_t longest_prefix = 0;
   while (table_entry != NULL) {
-    uint32_t masked = dest_ip & table_entry->mask.s_addr;
+    uint32_t masked = dest_ip_n & table_entry->mask.s_addr;
     if (masked == table_entry->dest.s_addr) {
       if (longest_entry == NULL) {
         longest_prefix = masked;

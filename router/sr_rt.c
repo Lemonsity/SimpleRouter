@@ -170,6 +170,8 @@ void sr_print_routing_entry(struct sr_rt* entry)
     assert(entry);
     assert(entry->interface);
 
+    /* This seems to indicate that they are in network byte order, 
+    and are converted to string*/
     printf("%s\t\t",inet_ntoa(entry->dest));
     printf("%s\t",inet_ntoa(entry->gw));
     printf("%s\t",inet_ntoa(entry->mask));
