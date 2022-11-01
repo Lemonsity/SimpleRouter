@@ -82,6 +82,8 @@ void sr_handlepacket(struct sr_instance* sr,
     /* TODO packet too short to be ethernet */
   }
   sr_ethernet_hdr_t* ethernet_header = (sr_ethernet_hdr_t*)packet;
+
+  /* Control flow for different ethernet protocol */
   if (ethernet_header->ether_type == htons(ethertype_ip)
     && len >= sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)) {
     sr_handle_ip_packet(sr, packet, len, interface);
@@ -93,45 +95,55 @@ void sr_handlepacket(struct sr_instance* sr,
   }
 }/* end sr_ForwardPacket */
 
-void sr_handle_ip_packet(struct sr_instance* sr /*lent*/, 
-  uint8_t* packet /*lent*/, 
-  unsigned int len, 
+void sr_handle_ip_packet(struct sr_instance* sr /*lent*/,
+  uint8_t* packet /*lent*/,
+  unsigned int len,
   char* interface /*lent*/) {
 
   sr_ip_hdr_t* ip_header = (sr_ip_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
-  
-  /* TODO do checksum here*/
+
+  /* validate checksum */
   if (validate_ip_checksum(ip_header) != 0) {
     /* TODO checksum error */
     return;
   }
+
   /* TODO replace vvv this with getting own IP address*/
   struct sr_if* if_router = sr_get_interface(sr, interface);
   uint16_t router_ip = if_router->ip;
-  
+
   if (router_ip == ip_header->ip_dst) { /* TODO this needs testing, do we need to htonl / ntohl? */
     /* TODO packet meant for router, handle it*/
   } else {
     /* TODO packet not meant for router, forward it*/
-    
+
+    /* validate TTL */
+    if (ip_header->ip_ttl == 0) {
+      /* TODO TTL error */
+      return;
+    }
+
     uint32_t dest_ip = ip_header->ip_dst;
 
-
-
-    /* TODO check routing table*/
-    struct sr_rt * rt_entry = longest_prefix_match(sr, dest_ip);
+    /* find routing table match */
+    struct sr_rt* rt_entry = longest_prefix_match(sr, dest_ip);
     if (rt_entry == NULL) {
       /* TODO send ICMP host unreachable*/
       return;
     } else {
+      /* TODO check ARP */
+   
+      /* TODO update TTL and checksum */
 
+      /* TODO forward packet*/
     }
   }
 }
 
-void decrement_ttl(sr_ip_hdr_t * ip_header) {
-  ip_header -> ip_ttl--;
+void decrement_ttl(sr_ip_hdr_t* ip_header) {
+  ip_header->ip_ttl--;
   /* TODO update checksum*/
+
 }
 
 /*---------------------
@@ -140,9 +152,9 @@ void decrement_ttl(sr_ip_hdr_t * ip_header) {
  * If the checksum is valid, the function should return 0
  * If return non-zero, it indicated the checksum is not valid
 -----------------------*/
-uint8_t validate_ip_checksum(sr_ip_hdr_t * ip_header) {
+uint8_t validate_ip_checksum(sr_ip_hdr_t* ip_header) {
   uint32_t sum = 0;
-  uint16_t * address = ip_header;
+  uint16_t* address = ip_header;
   for (int i = 0; i < 10; i++) {
     sum += *address;
   }
@@ -152,11 +164,9 @@ uint8_t validate_ip_checksum(sr_ip_hdr_t * ip_header) {
   return ~sum;
 }
 
-
-
-struct sr_rt * longest_prefix_match(struct sr_instance * sr /*lent*/, uint32_t dest_ip /*lent*/) {
-  struct sr_rt * table_entry = sr->routing_table;
-  struct sr_rt * longest_entry = NULL;
+struct sr_rt* longest_prefix_match(struct sr_instance* sr /*lent*/, uint32_t dest_ip /*lent*/) {
+  struct sr_rt* table_entry = sr->routing_table;
+  struct sr_rt* longest_entry = NULL;
   uint32_t longest_prefix = 0;
   while (table_entry != NULL) {
     uint32_t masked = dest_ip & table_entry->mask.s_addr;
