@@ -125,8 +125,10 @@ void sr_handle_ip_packet(struct sr_instance* sr /*lent*/,
   /* TODO packet not meant for router, forward it*/
 
   /* validate TTL */
-  if (ip_header->ip_ttl == 0) {
-    /* TODO TTL error */
+  /* If TTL == 1, then the router would decrement it to 0 and send ICMP*/
+  if (ip_header->ip_ttl == 1) { 
+    /* TODO TTL error, ICMP */
+
     return;
   }
 
