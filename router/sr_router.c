@@ -147,15 +147,73 @@ void sr_handle_ip_packet(struct sr_instance* sr /*lent*/,
   }
 
   /* TODO update eth header and checksum */
-  sr_ethernet_hdr_t * packet_as_eth = (sr_ethernet_hdr_t *)packet;
+  sr_ethernet_hdr_t* packet_as_eth = (sr_ethernet_hdr_t*)packet;
 
 
   /* TODO update TTL and checksum */
-  sr_ip_hdr_t * packet_as_ip = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+  sr_ip_hdr_t* packet_as_ip = (sr_ip_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
 
   /* TODO forward packet */
-  
 
+
+}
+
+
+
+int send_icmp_unreachable(struct sr_instance* sr, 
+  uint8_t* buf, 
+  unsigned int len, 
+  char* interface, 
+  uint8_t icmp_code) {
+    sr_ethernet_hdr_t* original_eth_header = (sr_ethernet_hdr_t *)buf;
+    sr_ip_hdr_t* original_ip_header = (sr_ip_hdr_t *)(buf + sizeof(sr_ethernet_hdr_t));
+
+    sr_ethernet_hdr_t* eth_header = (sr_ethernet_hdr_t *)calloc(1, sizeof(sr_ethernet_hdr_t));
+    sr_ip_hdr_t* ip_header = (sr_ip_hdr_t *)calloc(1, sizeof(sr_ip_hdr_t));
+    sr_icmp_t3_hdr_t * icmp_header = (sr_icmp_t3_hdr_t *)calloc(1, sizeof(sr_icmp_t3_hdr_t));
+    
+    if (eth_header == NULL || ip_header == NULL || icmp_header == NULL) {
+      return 10;
+    }
+
+    icmp_header->icmp_type = 3;
+    icmp_header->icmp_code = icmp_code;
+    icmp_header->icmp_sum = 0;
+    icmp_header->unused = 0;
+    icmp_header->next_mtu = 0;
+    memcpy(icmp_header->data, original_ip_header, sizeof(sr_ip_hdr_t));
+    memcpy(icmp_header->data + sizeof(sr_ip_hdr_t), buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), 8);
+    uint16_t sum = cksum(icmp_header, sizeof(sr_icmp_hdr_t)); /* TODO This checksum need some asking*/
+    icmp_header->icmp_sum = sum;
+
+    ip_header->ip_v = original_ip_header->ip_v;
+    ip_header->ip_hl = 5;
+    ip_header->ip_tos = original_ip_header->ip_tos;
+    ip_header->ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
+    ip_header->ip_id = original_ip_header->ip_id;
+    ip_header->ip_off = 0;
+    ip_header->ip_ttl = INIT_TTL;
+    ip_header->ip_p = ip_protocol_icmp;
+    ip_header->ip_sum = 0;
+    ip_header->ip_src = sr_get_interface(sr, interface)->ip;
+    ip_header->ip_dst = original_ip_header->ip_src;
+    ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
+
+    memcpy(eth_header->ether_dhost, original_eth_header->ether_shost, ETHER_ADDR_LEN); 
+    memcpy(eth_header->ether_shost, sr_get_interface(sr, interface)->addr, ETHER_ADDR_LEN); 
+    eth_header->ether_type = ethertype_ip;
+
+    uint8_t* combined_packet = calloc(1, sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
+    memcpy(combined_packet, eth_header, sizeof(sr_ethernet_hdr_t));
+    memcpy(combined_packet + sizeof(sr_ethernet_hdr_t), ip_header, sizeof(sr_ip_hdr_t));
+    memcpy(combined_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), eth_header, sizeof(sr_icmp_hdr_t));
+    free(eth_header);
+    free(ip_header);
+    free(icmp_header);
+    int result = sr_send_packet(sr, combined_packet, sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t), interface);
+    free(combined_packet);
+
+   return result;
 }
 
 void decrement_ttl(sr_ip_hdr_t* ip_header) {
