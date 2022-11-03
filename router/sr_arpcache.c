@@ -72,7 +72,7 @@ int sr_send_arp_request(struct sr_instance * sr,
     ethernet_header->ether_type = htons(ethertype_arp);
 
     arp_header->ar_hrd = htons(arp_hrd_ethernet);
-    arp_header->ar_pro = htos(0x0800);
+    arp_header->ar_pro = htons(0x0800);
     arp_header->ar_hln = 0x06;
     arp_header->ar_pln = 0x04;
     arp_header->ar_op = htons(arp_op_request);
