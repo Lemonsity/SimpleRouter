@@ -185,7 +185,7 @@ int send_icmp_unreachable(struct sr_instance* sr,
     icmp_header->icmp_sum = sum;
 
     ip_header->ip_v = original_ip_header->ip_v;
-    ip_header->ip_hl = original_ip_header->ip_hl;
+    ip_header->ip_hl = 5;
     ip_header->ip_tos = original_ip_header->ip_tos;
     ip_header->ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
     ip_header->ip_id = original_ip_header->ip_id;
