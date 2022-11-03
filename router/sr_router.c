@@ -177,6 +177,7 @@ void sr_handle_arp_packet(struct sr_instance* sr,
 }
 
 int sr_handle_arp_req() {
+  /* TODO handle request */
   return 0;
 }
 
