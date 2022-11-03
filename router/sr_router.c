@@ -187,21 +187,21 @@ int send_icmp_unreachable(struct sr_instance* sr,
     icmp_header->icmp_sum = sum;
 
     ip_header->ip_v = original_ip_header->ip_v;
-    ip_header->ip_hl = 5;
+    ip_header->ip_hl = 0x5;
     ip_header->ip_tos = original_ip_header->ip_tos;
-    ip_header->ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
+    ip_header->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
     ip_header->ip_id = original_ip_header->ip_id;
     ip_header->ip_off = 0;
     ip_header->ip_ttl = INIT_TTL;
     ip_header->ip_p = ip_protocol_icmp;
     ip_header->ip_sum = 0;
-    ip_header->ip_src = sr_get_interface(sr, interface)->ip;
+    ip_header->ip_src = htonl(sr_get_interface(sr, interface)->ip);
     ip_header->ip_dst = original_ip_header->ip_src;
     ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
 
     memcpy(eth_header->ether_dhost, original_eth_header->ether_shost, ETHER_ADDR_LEN); 
     memcpy(eth_header->ether_shost, sr_get_interface(sr, interface)->addr, ETHER_ADDR_LEN); 
-    eth_header->ether_type = ethertype_ip;
+    eth_header->ether_type = htons(ethertype_ip);
 
     uint8_t* combined_packet = calloc(1, sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
     memcpy(combined_packet, eth_header, sizeof(sr_ethernet_hdr_t));
