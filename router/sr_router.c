@@ -110,8 +110,9 @@ void sr_handle_ip_packet(struct sr_instance *sr /*lent*/,
                          unsigned int len,
                          char *interface /*lent*/)
 {
-
+  sr_ethernet_hdr_t* ethernet_header = (sr_ethernet_hdr_t*)packet;
   sr_ip_hdr_t *ip_header = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+  struct sr_if* corresponing_interface= sr_get_interface(sr, interface);
 
   // Check if length is reasonable.
   if ((sizeof(sr_ip_hdr_t) + sizeof(sr_ethernet_hdr_t)) > len)
@@ -127,10 +128,76 @@ void sr_handle_ip_packet(struct sr_instance *sr /*lent*/,
   {
     /* TODO checksum error */
     ip_header->ip_sum = tempSum; // Change the wrong sum back
-    printf("the ip packet sum was not right.");
+    printf("the ip packet sum was not right.\n");
     return;
   }
   ip_header->ip_sum = tempSum; // Change the sum back no matter what
+
+  // check what is package destination
+  struct sr_if *curr_interface = sr->if_list;
+  while (curr_interface != NULL)
+  {
+    // if the package is belong to my route.
+    if (ip_header->ip_dst == curr_interface->ip)
+    {
+      printf("this package belong to my route.\n");
+
+      // Check the packet is icmp packet(Internet Control Message Protocol)
+      if (ip_protocol_icmp == ip_header->ip_p)
+      {
+        printf("this package is icmp packet\n");
+
+        sr_icmp_hdr_t *icmp_header = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+
+        // Check if the packet is Echo reply (type 0)
+        if (icmp_header->icmp_type == 0x08)
+        {
+          printf("the icmp packet type is echo.");
+
+          struct sr_if *temp_interface;
+
+          struct sr_rt *curr_table_row = sr->routing_table;
+          while (curr_table_row != NULL)
+          {
+            // find the longest prefix match
+            uint32_t masked = curr_table_row->mask.s_addr & ip_header->ip_src;
+            if (masked == curr_table_row->dest.s_addr)
+            {
+              temp_interface = sr_get_interface(sr, curr_table_row->interface);
+            }
+            curr_table_row = curr_table_row->next;
+          }
+
+          // Change ethernet header info
+          memcpy(ethernet_header->ether_dhost, ethernet_header->ether_shost, ETHER_ADDR_LEN);
+          memcpy(ethernet_header->ether_shost, temp_interface->addr, ETHER_ADDR_LEN);
+          // Change ip header info
+          ip_header->ip_dst = ip_header->ip_src;
+          ip_header->ip_src = corresponing_interface->ip;
+          ip_header->ip_sum = 0;
+          ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
+          // Change icmp header info
+          icmp_header->icmp_code = 0x00;
+          icmp_header->icmp_type = 0x00;
+          icmp_header->icmp_sum = 0;
+          icmp_header->icmp_sum = cksum(icmp_header, ntohs(len) -
+                                                   sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t));
+
+          sr_send_packet(sr, packet, len, temp_interface->name);
+        }
+        // Then else, Port unreachable (type 3, code 3)
+        else
+        {
+          printf("this package is TCP/UDP packet\n");
+          // Base on current teammate function call, MAY need to change arguments
+          send_icmp_unreachable(sr, packet, len, curr_interface, 0x03);
+        }
+        return;
+      }
+      curr_interface = curr_interface->next;
+    }
+    // if the package is NOT belong to my route.
+  }
 
   uint32_t dest_ip_n = ip_header->ip_dst;
   uint32_t dest_ip_h = ntohl(ip_header->ip_dst);
