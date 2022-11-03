@@ -66,9 +66,14 @@ int sr_read_from_server(struct sr_instance*);
 /* -- sr_router.c -- */
 void sr_init(struct sr_instance*);
 void sr_handle_ip_packet(struct sr_instance* sr, uint8_t* packet, unsigned int len, char* interface);
+uint8_t send_icmp_unreachable(struct sr_instance* sr,
+  uint8_t* buf,
+  unsigned int len,
+  char* interface,
+  uint8_t icmp_code);
 void decrement_ttl(sr_ip_hdr_t* ip_header);
 uint8_t validate_ip_checksum(sr_ip_hdr_t* ip_header);
-struct sr_rt* longest_prefix_match(struct sr_instance* sr, uint32_t dest_ip_n );
+struct sr_rt* longest_prefix_match(struct sr_instance* sr, uint32_t dest_ip_n);
 void sr_handlepacket(struct sr_instance*, uint8_t*, unsigned int, char*);
 
 /* -- sr_if.c -- */

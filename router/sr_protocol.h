@@ -83,7 +83,7 @@ struct sr_icmp_hdr {
   uint8_t icmp_type;
   uint8_t icmp_code;
   uint16_t icmp_sum;
-  
+  uint32_t icmp_rest;
 } __attribute__ ((packed)) ;
 typedef struct sr_icmp_hdr sr_icmp_hdr_t;
 
@@ -148,7 +148,9 @@ struct sr_ethernet_hdr
 } __attribute__ ((packed)) ;
 typedef struct sr_ethernet_hdr sr_ethernet_hdr_t;
 
-
+enum sr_icmp_3_code {
+  icmp_host_unreachable = 0x01,
+};
 
 enum sr_ip_protocol {
   ip_protocol_icmp = 0x0001,
