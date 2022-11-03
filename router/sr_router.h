@@ -66,7 +66,7 @@ int sr_read_from_server(struct sr_instance*);
 /* -- sr_router.c -- */
 void sr_init(struct sr_instance*);
 void sr_handle_ip_packet(struct sr_instance* sr, uint8_t* packet, unsigned int len, char* interface);
-uint8_t send_icmp_unreachable(struct sr_instance* sr,
+int send_icmp_unreachable(struct sr_instance* sr,
   uint8_t* buf,
   unsigned int len,
   char* interface,
