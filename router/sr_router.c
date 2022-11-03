@@ -181,9 +181,16 @@ int send_icmp_unreachable(struct sr_instance* sr,
     icmp_header->icmp_sum = 0;
     icmp_header->unused = 0;
     icmp_header->next_mtu = 0;
-    memcpy(icmp_header->data, original_ip_header, sizeof(sr_ip_hdr_t));
-    memcpy(icmp_header->data + sizeof(sr_ip_hdr_t), buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), 8);
-    uint16_t sum = cksum(icmp_header, sizeof(sr_icmp_hdr_t)); /* TODO This checksum need some asking*/
+    int icmp_data_size = ICMP_DATA_SIZE;
+    if (len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t) < icmp_data_size) {
+      icmp_data_size = len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t);
+    }
+    uint8_t * blank = (uint8_t*)calloc(1, ICMP_DATA_SIZE);
+    memcpy(icmp_header->data, blank, ICMP_DATA_SIZE);
+    free(blank);
+    memcpy(icmp_header->data, buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), icmp_data_size);
+    
+    uint16_t sum = cksum(icmp_header, sizeof(sr_icmp_t3_hdr_t)); /* TODO This checksum need some asking*/
     icmp_header->icmp_sum = sum;
 
     ip_header->ip_v = original_ip_header->ip_v;
