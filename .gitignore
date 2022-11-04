@@ -3,3 +3,5 @@ http_server2
 pox
 pox_module
 router/*.d
+.DS_Store
+router/.DS_Store

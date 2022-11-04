@@ -91,7 +91,7 @@ void sr_handlepacket(struct sr_instance* sr,
     sr_handle_ip_packet(sr, packet, len, interface);
   } else if (ethernet_header->ether_type == htons(ethertype_arp)
     && len >= sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t)) {
-    /* TODO handle ARP sr_handle_arp_packet(sr, packet, len, interface);*/
+    sr_handle_arp_packet(sr, packet, len, interface);
   } else {
     /* TODO not ip or arp */
   }
@@ -219,11 +219,13 @@ int forward_ip_packet(struct sr_instance* sr,
   struct sr_rt* routing_entry = longest_prefix_match(sr, arp_request->ip);
   if (routing_entry == NULL) {
     /* TODO No Routing */
+    free(arp_entry);
     return 20;
   }
   struct sr_if* exit_interface = sr_get_interface(sr, routing_entry->interface);
   if (exit_interface == NULL) {
     /* TODO NO exit interface*/
+    free(arp_entry);
     return 30;
   }
 
@@ -233,6 +235,7 @@ int forward_ip_packet(struct sr_instance* sr,
     /* Allocate for packet */
     uint8_t* combined_packet = (uint8_t*)calloc(1, packet->len);
     if (combined_packet == NULL) {
+      free(arp_entry);
       return 1;
     }
     /* Divide into blocks */
@@ -252,11 +255,13 @@ int forward_ip_packet(struct sr_instance* sr,
     int result = sr_send_packet(sr, combined_packet, packet->len, exit_interface->name);
 
     if (result) {
+      free(arp_entry);
       return 2;
     }
     free(combined_packet);
     packet = packet->next;
   }
+  free(arp_entry);
   return 0;
 }
 

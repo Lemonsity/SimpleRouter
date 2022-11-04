@@ -22,7 +22,6 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
     struct sr_arpcache cache = sr -> cache;
     struct sr_arpreq * req = sr -> cache.requests;
     while (req != NULL) {
-        /* TODO vvv Check potential null/freed pointer issue */ 
         struct sr_arpreq * temp = req; /* Handle arpreq can potentially free the pointer */
         req = req->next;
         handle_arpreq(sr, temp);
@@ -39,7 +38,6 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq * req) {
                 send_icmp_unreachable_or_timeout(sr, packet->buf, packet->len, packet->iface, 3, 1);
                 packet = packet -> next;
             }
-            /* TODO vvv Check potential null/freed pointer issue */ 
             sr_arpreq_destroy(&(sr->cache), req);
         }
         else {
