@@ -66,11 +66,23 @@ int sr_read_from_server(struct sr_instance*);
 /* -- sr_router.c -- */
 void sr_init(struct sr_instance*);
 void sr_handle_ip_packet(struct sr_instance* sr, uint8_t* packet, unsigned int len, char* interface);
-int send_icmp_unreachable(struct sr_instance* sr,
+void sr_handle_arp_packet(struct sr_instance* sr,
+  uint8_t* packet /*lent*/,
+  unsigned int len,
+  char* interface_name /*lent*/);
+int sr_handle_arp_req();
+int sr_handle_arp_reply(struct sr_instance* sr,
+  uint8_t* packet /*lent*/,
+  unsigned int len,
+  char* interface_name /*lent*/);
+int send_icmp_unreachable_or_timeout(struct sr_instance* sr,
   uint8_t* buf,
   unsigned int len,
   char* interface,
+  uint8_t icmp_type,
   uint8_t icmp_code);
+int forward_ip_packet(struct sr_instance* sr,
+  struct sr_arpreq* arp_request);
 void decrement_ttl(sr_ip_hdr_t* ip_header);
 uint8_t validate_ip_checksum(sr_ip_hdr_t* ip_header);
 struct sr_rt* longest_prefix_match(struct sr_instance* sr, uint32_t dest_ip_n);

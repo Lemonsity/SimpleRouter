@@ -12,7 +12,9 @@
  **********************************************************************/
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 
 
 #include "sr_if.h"
@@ -191,7 +193,7 @@ int sr_handle_arp_reply(struct sr_instance* sr,
 
   if (interface->ip != target_ip_h) {
     /* TODO packet not meant for us, maybe just drop it? */
-    return;
+    return 10;
   }
 
   /* TODO arp meant for us*/
@@ -199,7 +201,7 @@ int sr_handle_arp_reply(struct sr_instance* sr,
   if (arp_request != NULL) {
     int result = forward_ip_packet(sr, arp_request);
     if (result) {
-      return 10;
+      return result;
     }
     sr_arpreq_destroy(&(sr->cache), arp_request);
   }
@@ -214,15 +216,15 @@ int forward_ip_packet(struct sr_instance* sr,
     /* TODO cache got deleted in the middle, abort abort!!! */
     return 10;
   }
-  struct sr_rt * routing_entry = longest_prefix_match(sr, arp_request->ip);
+  struct sr_rt* routing_entry = longest_prefix_match(sr, arp_request->ip);
   if (routing_entry == NULL) {
     /* TODO No Routing */
-    return;
+    return 20;
   }
-  struct sr_if * exit_interface = sr_get_interface(sr, routing_entry->interface);
+  struct sr_if* exit_interface = sr_get_interface(sr, routing_entry->interface);
   if (exit_interface == NULL) {
     /* TODO NO exit interface*/
-    return;
+    return 30;
   }
 
   struct sr_packet* packet = arp_request->packets;
@@ -242,7 +244,7 @@ int forward_ip_packet(struct sr_instance* sr,
 
     memcpy(ethernet_header->ether_shost, exit_interface->addr, ETHER_ADDR_LEN);
     memcpy(ethernet_header->ether_dhost, arp_entry->mac, ETHER_ADDR_LEN);
-    
+
     /*========================================*/
     /* TODO do I handle TTL here? or earlier? */
     /*========================================*/
@@ -250,20 +252,19 @@ int forward_ip_packet(struct sr_instance* sr,
     int result = sr_send_packet(sr, combined_packet, packet->len, exit_interface->name);
 
     if (result) {
-      return 20;
+      return 2;
     }
-
     free(combined_packet);
-    
     packet = packet->next;
   }
   return 0;
 }
 
-int send_icmp_unreachable(struct sr_instance* sr,
+int send_icmp_unreachable_or_timeout(struct sr_instance* sr,
   uint8_t* buf,
   unsigned int len,
   char* interface,
+  uint8_t icmp_type,
   uint8_t icmp_code) {
   sr_ethernet_hdr_t* original_eth_header = (sr_ethernet_hdr_t*)buf;
   sr_ip_hdr_t* original_ip_header = (sr_ip_hdr_t*)(buf + sizeof(sr_ethernet_hdr_t));
@@ -273,36 +274,50 @@ int send_icmp_unreachable(struct sr_instance* sr,
   sr_icmp_t3_hdr_t* icmp_header = (sr_icmp_t3_hdr_t*)calloc(1, sizeof(sr_icmp_t3_hdr_t));
 
   if (eth_header == NULL || ip_header == NULL || icmp_header == NULL) {
-    return 10;
+    return 100;
   }
 
-  icmp_header->icmp_type = 3;
+  icmp_header->icmp_type = icmp_type;
   icmp_header->icmp_code = icmp_code;
   icmp_header->icmp_sum = 0;
   icmp_header->unused = 0;
   icmp_header->next_mtu = 0;
-  memcpy(icmp_header->data, original_ip_header, sizeof(sr_ip_hdr_t));
-  memcpy(icmp_header->data + sizeof(sr_ip_hdr_t), buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), 8);
-  uint16_t sum = cksum(icmp_header, sizeof(sr_icmp_hdr_t)); /* TODO This checksum need some asking*/
+  /* Assume 8 bytes of data */
+  int real_icmp_data_size = ICMP_DATA_SIZE;
+  /* IP actually have less then 8 bytes*/
+  if (len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t) < real_icmp_data_size) {
+    /* Datagram only contains `real_icmp_data_size` bytes of "non-header" data */
+    real_icmp_data_size = len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t);
+  }
+  uint8_t* blank = (uint8_t*)calloc(1, ICMP_DATA_SIZE);
+  /* Copy the non-header data into blank */
+  memcpy(blank, buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), real_icmp_data_size);
+  memcpy(icmp_header->data, blank, ICMP_DATA_SIZE);
+  free(blank);
+
+  uint16_t sum = cksum(icmp_header, sizeof(sr_icmp_t3_hdr_t));
   icmp_header->icmp_sum = sum;
 
+  /* Fille IP */
   ip_header->ip_v = original_ip_header->ip_v;
   ip_header->ip_hl = 0x5;
   ip_header->ip_tos = original_ip_header->ip_tos;
-  ip_header->ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t);
+  ip_header->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
   ip_header->ip_id = original_ip_header->ip_id;
   ip_header->ip_off = 0;
   ip_header->ip_ttl = INIT_TTL;
   ip_header->ip_p = ip_protocol_icmp;
   ip_header->ip_sum = 0;
-  ip_header->ip_src = sr_get_interface(sr, interface)->ip;
+  ip_header->ip_src = htonl(sr_get_interface(sr, interface)->ip);
   ip_header->ip_dst = original_ip_header->ip_src;
   ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
 
+  /* Fill Ethernet*/
   memcpy(eth_header->ether_dhost, original_eth_header->ether_shost, ETHER_ADDR_LEN);
   memcpy(eth_header->ether_shost, sr_get_interface(sr, interface)->addr, ETHER_ADDR_LEN);
-  eth_header->ether_type = ethertype_ip;
+  eth_header->ether_type = htons(ethertype_ip);
 
+  /* combine back into one */
   uint8_t* combined_packet = calloc(1, sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
   memcpy(combined_packet, eth_header, sizeof(sr_ethernet_hdr_t));
   memcpy(combined_packet + sizeof(sr_ethernet_hdr_t), ip_header, sizeof(sr_ip_hdr_t));
@@ -315,6 +330,7 @@ int send_icmp_unreachable(struct sr_instance* sr,
 
   return result;
 }
+
 
 void decrement_ttl(sr_ip_hdr_t* ip_header) {
   ip_header->ip_ttl--;
