@@ -20,44 +20,74 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
     /* Fill this in */
     /* TODO this function needs to be completed */
     struct sr_arpcache cache = sr -> cache;
-    struct sr_arpreq * head = sr -> cache.requests;
-    while (head != NULL) {
-        /* retieve req and setup for next iter */
-        struct sr_arpreq * req = head;
-        uint32_t ip = req -> ip;
-        head = head -> next;
-
-        struct sr_arpentry * cached_value = sr_arpcache_lookup(&cache, ip);
-
-        /* did not found match in table*/
-        if (cached_value == NULL) {
-
-        } else { /* found match in table */
-
-        }
-
+    struct sr_arpreq * req = sr -> cache.requests;
+    while (req != NULL) {
+        /* TODO vvv Check potential null/freed pointer issue */ 
+        struct sr_arpreq * temp = req; /* Handle arpreq can potentially free the pointer */
+        req = req->next;
+        handle_arpreq(sr, temp);
     } 
 
 }
 
-void handle_arpreq(struct sr_arpreq * req) {
+void handle_arpreq(struct sr_instance* sr, struct sr_arpreq * req) {
     time_t time_now = time(NULL);
     if (difftime(time_now, req -> sent) > 1.0) {
         if (req -> times_sent >= 5) {
-            /* TODO 
-            send icmp host unreachable to source addr of all pkts waiting
-                on this request
-            arpreq_destroy(req)
-            */
+            struct sr_packet* packet = req->packets;
+            while (packet != NULL) {
+                send_icmp_unreachable(sr, packet->buf, packet->len, packet->iface, 1);
+                packet = packet -> next;
+            }
+            /* TODO vvv Check potential null/freed pointer issue */ 
+            sr_arpreq_destroy(&(sr->cache), req);
         }
         else {
-            /*
-            send arp request
-            req->sent = now
-            req->times_sent++
-            */
+            /* TODO send arp request*/
+            struct sr_if* interface = sr->if_list;
+            while (interface != NULL) {
+                sr_send_arp_request(sr, interface->name, req->ip);
+                interface = interface -> next;
+            }
+            req->sent = time(NULL);
+            req->times_sent++;
         }
     }
+}
+
+int sr_send_arp_request(struct sr_instance * sr, 
+    char * interface_name, 
+    uint32_t target_ip) {
+
+    uint8_t * combined_packet = (uint8_t *)calloc(1, sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t));
+    sr_ethernet_hdr_t * ethernet_header = (sr_ethernet_hdr_t *)combined_packet;
+    sr_arp_hdr_t * arp_header = (sr_arp_hdr_t *)(combined_packet + sizeof(sr_ethernet_hdr_t));
+
+    struct sr_if* interface = sr_get_interface(sr, interface_name);
+    int i = 0;
+    for (; i < 6; i++) {
+        ethernet_header->ether_dhost[i] = 0xff;
+    }
+    memcpy(ethernet_header->ether_shost, interface->addr, ETHER_ADDR_LEN);
+    ethernet_header->ether_type = htons(ethertype_arp);
+
+    arp_header->ar_hrd = htons(arp_hrd_ethernet);
+    arp_header->ar_pro = htons(0x0800);
+    arp_header->ar_hln = 0x06;
+    arp_header->ar_pln = 0x04;
+    arp_header->ar_op = htons(arp_op_request);
+    memcpy(arp_header->ar_sha, interface->addr, ETHER_ADDR_LEN);
+    arp_header->ar_sip = htonl(interface->ip);
+    /* arp_header->ar_tha: requesting, does not need to fill */
+    arp_header->ar_tip = htonl(target_ip);
+    
+    int result;
+    if (result = sr_send_packet(sr, combined_packet, sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t), interface_name)) {
+        /* TODO handle fail to send error*/
+        return result;
+    }
+    free(combined_packet);
+    return 0;
 }
 
 /* You should not need to touch the rest of this code. */
