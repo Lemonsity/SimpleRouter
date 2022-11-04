@@ -166,8 +166,8 @@ int send_icmp_unreachable_or_timeout(struct sr_instance* sr,
   uint8_t* buf, 
   unsigned int len, 
   char* interface, 
-  uint8_t icmp_code,
-  uint8_t icmp_type) {
+  uint8_t icmp_type,
+  uint8_t icmp_code) {
     sr_ethernet_hdr_t* original_eth_header = (sr_ethernet_hdr_t *)buf;
     sr_ip_hdr_t* original_ip_header = (sr_ip_hdr_t *)(buf + sizeof(sr_ethernet_hdr_t));
 
