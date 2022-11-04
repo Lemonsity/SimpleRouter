@@ -36,7 +36,7 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq * req) {
         if (req -> times_sent >= 5) {
             struct sr_packet* packet = req->packets;
             while (packet != NULL) {
-                send_icmp_unreachable(sr, packet->buf, packet->len, packet->iface, 1);
+                send_icmp_unreachable_or_timeout(sr, packet->buf, packet->len, packet->iface, 3, 1);
                 packet = packet -> next;
             }
             /* TODO vvv Check potential null/freed pointer issue */ 
