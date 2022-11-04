@@ -169,7 +169,7 @@ void sr_handle_arp_packet(struct sr_instance* sr,
   uint16_t op = ntohs(arp_header->ar_op);
   int result = 0;
   if (op == arp_op_request) {
-    result = sr_handle_arp_req();
+    result = sr_handle_arp_req(sr, packet, len, interface_name);
   } else if (op == arp_op_reply) {
     result = sr_handle_arp_reply(sr, packet, len, interface_name);
   } else {
@@ -178,9 +178,36 @@ void sr_handle_arp_packet(struct sr_instance* sr,
   }
 }
 
-int sr_handle_arp_req() {
-  /* TODO handle request */
+int sr_handle_arp_req(struct sr_instance* sr,
+  uint8_t* packet /*lent*/,
+  unsigned int len,
+  char* interface_name /*lent*/) {
+  sr_arp_hdr_t* arp_header = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
+  struct sr_if* interface = sr_get_interface(sr, interface_name);
+  uint16_t target_ip_h = ntohl(arp_header->ar_tip);
+  uint16_t from_ip_h = ntohl(arp_header->ar_sip);
+
+  if (interface->ip != target_ip_h) {
+    /* TODO packet not meant for us, maybe just drop it? */
+    return 10;
+  }
+
+  sr_arpcache_insert(&(sr->cache), arp_header->ar_hrd, from_ip_h);
+  struct sr_arpentry* arp_req = sr_arpcache_lookup(&(sr->cache), from_ip_h);
+  if (arp_req != NULL) {
+    int result = forward_ip_packet_for_arp_req(sr, arp_req, interface_name);
+    free(arp_req);
+    if (result) {
+      return result;
+    }
+  }
   return 0;
+}
+
+int forward_ip_packet_for_arp_req(struct sr_instance* sr,
+  struct sr_arpentry* arp_req,
+  char* interface_name /*lent*/) {
+  /* TODO : Finish this part */
 }
 
 int sr_handle_arp_reply(struct sr_instance* sr,
@@ -199,7 +226,7 @@ int sr_handle_arp_reply(struct sr_instance* sr,
   /* TODO arp meant for us*/
   struct sr_arpreq* arp_request = sr_arpcache_insert(&(sr->cache), arp_header->ar_sha, target_ip_h);
   if (arp_request != NULL) {
-    int result = forward_ip_packet(sr, arp_request);
+    int result = forward_ip_packet_for_arp_reply(sr, arp_request);
     if (result) {
       return result;
     }
@@ -208,7 +235,7 @@ int sr_handle_arp_reply(struct sr_instance* sr,
   return 0;
 }
 
-int forward_ip_packet(struct sr_instance* sr,
+int forward_ip_packet_for_arp_reply(struct sr_instance* sr,
   struct sr_arpreq* arp_request) {
   /* get arp entry of the matching ip */
   struct sr_arpentry* arp_entry = sr_arpcache_lookup(&(sr->cache), arp_request->ip);
