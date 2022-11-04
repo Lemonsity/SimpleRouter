@@ -160,11 +160,12 @@ void sr_handle_ip_packet(struct sr_instance* sr /*lent*/,
 
 
 
-int send_icmp_unreachable(struct sr_instance* sr, 
+int send_icmp_unreachable_or_timeout(struct sr_instance* sr, 
   uint8_t* buf, 
   unsigned int len, 
   char* interface, 
-  uint8_t icmp_code) {
+  uint8_t icmp_code,
+  uint8_t icmp_type) {
     sr_ethernet_hdr_t* original_eth_header = (sr_ethernet_hdr_t *)buf;
     sr_ip_hdr_t* original_ip_header = (sr_ip_hdr_t *)(buf + sizeof(sr_ethernet_hdr_t));
 
@@ -176,7 +177,7 @@ int send_icmp_unreachable(struct sr_instance* sr,
       return 10;
     }
 
-    icmp_header->icmp_type = 3;
+    icmp_header->icmp_type = icmp_type;
     icmp_header->icmp_code = icmp_code;
     icmp_header->icmp_sum = 0;
     icmp_header->unused = 0;
