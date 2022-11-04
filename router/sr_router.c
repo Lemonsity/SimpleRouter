@@ -207,7 +207,32 @@ int sr_handle_arp_req(struct sr_instance* sr,
 int forward_ip_packet_for_arp_req(struct sr_instance* sr,
   struct sr_arpentry* arp_req,
   char* interface_name /*lent*/) {
-  /* TODO : Finish this part */
+  /* get packet interface */
+  struct sr_if* interface = sr_get_interface(sr, interface_name);
+
+  /* Allocate packet */
+  uint8_t* combined_packet = (uint8_t*)calloc(1, ETHER_ADDR_LEN);
+  
+  /* Divide into blocks */
+  sr_ethernet_hdr_t* ethernet_header = (sr_ethernet_hdr_t*)combined_packet;
+  sr_ip_hdr_t* ip_header = (sr_ip_hdr_t*)(combined_packet + sizeof(sr_ethernet_hdr_t));
+
+  /* Copy value */
+  memcpy(combined_packet, interface->addr, ETHER_ADDR_LEN);
+
+  memcpy(ethernet_header->ether_shost, interface->addr, ETHER_ADDR_LEN);
+  memcpy(ethernet_header->ether_dhost, arp_req->mac, ETHER_ADDR_LEN);
+
+  /*========================================*/
+  /* TODO do I handle TTL here? or earlier? */
+  /*========================================*/
+
+  int result = sr_send_packet(sr, combined_packet, ETHER_ADDR_LEN, interface->name);
+  free(combined_packet);
+  if (result) {
+    return 2;
+  }
+  return 0;
 }
 
 int sr_handle_arp_reply(struct sr_instance* sr,
