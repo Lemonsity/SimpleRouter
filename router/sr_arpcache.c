@@ -78,22 +78,22 @@ int forward_ip_packet(struct sr_instance* sr,
 
 void handle_arpreq(struct sr_instance* sr, struct sr_arpreq * req) {
     time_t time_now = time(NULL);
-    if (difftime(time_now, req -> sent) > 1.0) {
-        if (req -> times_sent >= 5) {
+    /* Check if the last time sending this arp req is one second before. */
+    if (difftime(time_now, req->sent) >= 1.0) {
+        /* Check if this arp req has sent five times. */
+        if (req->times_sent >= 5) {
+            /* Get arp req packet. */
             struct sr_packet* packet = req->packets;
             while (packet != NULL) {
+                /* Sent icmp unreachable to every arp req packets. */
                 send_icmp_unreachable_or_timeout(sr, packet->buf, packet->len, packet->iface, 3, 1);
                 packet = packet -> next;
             }
             sr_arpreq_destroy(&(sr->cache), req);
         }
         else {
-            /* TODO send arp request*/
-            struct sr_if* interface = sr->if_list;
-            while (interface != NULL) {
-                sr_send_arp_request(sr, interface->name, req->ip);
-                interface = interface -> next;
-            }
+            /* Sent arp req. */
+            sr_send_arp_request(sr, longest_prefix_match(sr, req->ip)->name, req->ip);
             req->sent = time(NULL);
             req->times_sent++;
         }
