@@ -103,35 +103,40 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq * req) {
 int sr_send_arp_request(struct sr_instance * sr, 
     char * interface_name, 
     uint32_t target_ip) {
-
-    uint8_t * combined_packet = (uint8_t *)calloc(1, sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t));
-    sr_ethernet_hdr_t * ethernet_header = (sr_ethernet_hdr_t *)combined_packet;
-    sr_arp_hdr_t * arp_header = (sr_arp_hdr_t *)(combined_packet + sizeof(sr_ethernet_hdr_t));
-
+    /* Get packet interface */
     struct sr_if* interface = sr_get_interface(sr, interface_name);
-    int i = 0;
-    for (; i < 6; i++) {
-        ethernet_header->ether_dhost[i] = 0xff;
-    }
-    memcpy(ethernet_header->ether_shost, interface->addr, ETHER_ADDR_LEN);
-    ethernet_header->ether_type = htons(ethertype_arp);
 
-    arp_header->ar_hrd = htons(arp_hrd_ethernet);
-    arp_header->ar_pro = htons(0x0800);
-    arp_header->ar_hln = 0x06;
-    arp_header->ar_pln = 0x04;
-    arp_header->ar_op = htons(arp_op_request);
-    memcpy(arp_header->ar_sha, interface->addr, ETHER_ADDR_LEN);
-    arp_header->ar_sip = htonl(interface->ip);
-    /* arp_header->ar_tha: requesting, does not need to fill */
-    arp_header->ar_tip = htonl(target_ip);
-    
-    int result;
-    if (result = sr_send_packet(sr, combined_packet, sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t), interface_name)) {
-        /* TODO handle fail to send error*/
-        return result;
+    /* Create Ethernet and ARP packet */
+    sr_ethernet_hdr_t* ethernet_header;
+    sr_arp_hdr_t* arp_packet = (sr_arp_hdr_t*)malloc(sizeof(sr_arp_hdr_t));
+    unsigned int total_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+    ethernet_header = (sr_ethernet_hdr_t *)malloc(total_len);
+
+    /* Create ARP value */
+    arp_packet->ar_hrd = ntohs(arp_hrd_ethernet);
+    arp_packet->ar_pro = ntohs(ethertype_ip);
+    arp_packet->ar_hln = ETHER_ADDR_LEN;
+    arp_packet->ar_pln = 0x04;
+    arp_packet->ar_op = ntohs(arp_op_request);
+    memcpy(arp_packet->ar_sha, interface->addr, ETHER_ADDR_LEN);
+    arp_packet->ar_sip = interface->ip;
+    memcpy(arp_packet->ar_tha, htons(0), ETHER_ADDR_LEN);
+    arp_packet->ar_tip = target_ip;
+
+    /* Create Ethernet value */
+    memcpy(ethernet_header->ether_shost, interface->addr, ETHER_ADDR_LEN);
+    memcpy(ethernet_header->ether_dhost, htons(0xffffff), ETHER_ADDR_LEN);
+    ethernet_header->ether_type = ntohs(ethertype_arp);
+    memcpy(((uint8_t*)ethernet_header) + sizeof(sr_ethernet_hdr_t),
+    (uint8_t*)arp_packet, sizeof(sr_arp_hdr_t));
+
+    /* Send arp req packet and return the result. */
+    int result = sr_send_packet(sr, (uint8_t*)ethernet_header, total_len, interface->name);
+    free(arp_packet);
+    free(ethernet_header);
+    if (result) {
+        return 2;
     }
-    free(combined_packet);
     return 0;
 }
 
