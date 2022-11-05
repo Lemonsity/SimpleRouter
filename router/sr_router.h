@@ -90,7 +90,7 @@ int send_icmp_unreachable_or_timeout(struct sr_instance* sr,
   uint8_t icmp_code);
 void decrement_ttl(sr_ip_hdr_t* ip_header);
 uint8_t validate_ip_checksum(sr_ip_hdr_t* ip_header);
-struct sr_rt* longest_prefix_match(struct sr_instance* sr, uint32_t dest_ip_n);
+struct sr_if* longest_prefix_match(struct sr_instance* sr, sr_ip_hdr_t *ip_header);
 void sr_handlepacket(struct sr_instance*, uint8_t*, unsigned int, char*);
 
 /* -- sr_if.c -- */
