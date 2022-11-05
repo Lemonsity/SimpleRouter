@@ -8,6 +8,7 @@ This repository is created for assignment 3 project during lecture CSCD58 in 202
 | ---- | ------ | --------- |
 | Hongxiao Niu | niuhongx | 1006217345 |
 | Lianting Wang | wangl157 | 1007452374 |
+| Youzhang Sun | sunyou | 1005982830 |
 
 ## Explicit details of the contributions from each member of the team
 Hongxiao Niu: 
