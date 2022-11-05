@@ -34,7 +34,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
             /* Did not found match in arp table. */
             handle_arpreq(sr, req);
         } else { /* Found match in arp table. */
-            int result = forward_ip_packet(sr, req);
+            int result = forward_ip_packet(sr, req, cached_value);
             if (!result) {
               sr_arpreq_destroy(&(cache), req);
             }
@@ -45,8 +45,34 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 }
 
 int forward_ip_packet(struct sr_instance* sr,
-  struct sr_arpreq* arp_request) {
-    return -1;
+  struct sr_arpreq* arp_request,
+  struct sr_arpentry * target) {
+    int result = 0;
+    /* Get arp req packet. */
+    struct sr_packet *packets = arp_request->packets;
+    while (packets != NULL) {
+        /* Get packet interface. */
+        struct sr_if* interface = sr_get_interface(sr, packets->iface);
+
+        /* Get Ethernet header */
+        sr_ethernet_hdr_t* ethernet_header = (sr_ethernet_hdr_t*) packets->buf;
+        /* Add destination and source ethernet address */
+        memcpy(ethernet_header->ether_dhost, target->mac, ETHER_ADDR_LEN);
+        memcpy(ethernet_header->ether_shost, interface->addr, ETHER_ADDR_LEN);
+
+        /* Get IP header */
+        sr_ip_hdr_t* ip_header = (sr_ip_hdr_t*)(packets->buf + sizeof(sr_ethernet_hdr_t));
+        /* Update TTL and check sum */
+        ip_header->ip_ttl--;
+        ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
+
+        /* Send packet. */
+        result = result + sr_send_packet(sr, packets->buf, packets->len, packets->iface);
+        struct sr_packet *temp = packets;
+        packets = packets->next;
+        free(temp);
+    }
+    return result;
 }
 
 void handle_arpreq(struct sr_instance* sr, struct sr_arpreq * req) {
