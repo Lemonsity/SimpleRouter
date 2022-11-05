@@ -164,7 +164,6 @@ void sr_handle_arp_packet(struct sr_instance* sr,
   uint8_t* packet /*lent*/,
   unsigned int len,
   char* interface_name /*lent*/) {
-
   sr_arp_hdr_t* arp_header = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
   uint16_t op = ntohs(arp_header->ar_op);
   int result = 0;
@@ -182,20 +181,27 @@ int sr_handle_arp_req(struct sr_instance* sr,
   uint8_t* packet /*lent*/,
   unsigned int len,
   char* interface_name /*lent*/) {
+  /* Get arp header and packet interface. */
   sr_arp_hdr_t* arp_header = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
   struct sr_if* interface = sr_get_interface(sr, interface_name);
-  uint16_t target_ip_h = ntohl(arp_header->ar_tip);
-  uint16_t from_ip_h = ntohl(arp_header->ar_sip);
 
-  if (interface->ip != target_ip_h) {
-    /* TODO packet not meant for us, maybe just drop it? */
+  /* Get target, source and interface ip. */
+  uint32_t target_ip_h = ntohl(arp_header->ar_tip);
+  uint32_t source_ip_h = ntohl(arp_header->ar_sip);
+  uint32_t interface_ip_h = ntohl(interface->ip);
+
+  /* Drop packet if not for us. */
+  if (interface_ip_h != target_ip_h) {
     return 10;
   }
 
-  sr_arpcache_insert(&(sr->cache), arp_header->ar_hrd, from_ip_h);
-  struct sr_arpentry* arp_req = sr_arpcache_lookup(&(sr->cache), from_ip_h);
+  /* Add new arp record in arp cache entry. */
+  sr_arpcache_insert(&(sr->cache), arp_header->ar_sha, source_ip_h);
+  struct sr_arpentry* arp_req = sr_arpcache_lookup(&(sr->cache), source_ip_h);
+
+  /* If added success, send arp require packet. */
   if (arp_req != NULL) {
-    int result = forward_ip_packet_for_arp_req(sr, arp_req, interface_name);
+    int result = send_arp_req(sr, packet, len, interface_name);
     free(arp_req);
     if (result) {
       return result;
@@ -204,7 +210,7 @@ int sr_handle_arp_req(struct sr_instance* sr,
   return 0;
 }
 
-int forward_ip_packet_for_arp_req(struct sr_instance* sr,
+int send_arp_req(struct sr_instance* sr,
   struct sr_arpentry* arp_req,
   char* interface_name /*lent*/) {
   /* get packet interface */
