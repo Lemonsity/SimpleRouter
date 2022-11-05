@@ -107,7 +107,7 @@ struct sr_arpcache {
 };
 
 void sr_arpcache_sweepreqs(struct sr_instance *sr);
-void forward_ip_packet(struct sr_instance* sr,
+int forward_ip_packet(struct sr_instance* sr,
   struct sr_arpreq* arp_request,
   struct sr_arpentry * target);
 void handle_arpreq(struct sr_instance* sr, struct sr_arpreq * req);
