@@ -229,7 +229,7 @@ int send_back_arp_req(struct sr_instance* sr,
   arp_packet->ar_hrd = ntohs(arp_hrd_ethernet);
   arp_packet->ar_pro = ntohs(ethertype_ip);
   arp_packet->ar_hln = ETHER_ADDR_LEN;
-  arp_packet->ar_pln = 4;
+  arp_packet->ar_pln = 0x04;
   arp_packet->ar_op = ntohs(arp_op_reply);
   memcpy(arp_packet->ar_sha, interface->addr, ETHER_ADDR_LEN);
   arp_packet->ar_sip = interface->ip;
@@ -245,6 +245,8 @@ int send_back_arp_req(struct sr_instance* sr,
 
   /* Send arp req packet and return the result. */
   int result = sr_send_packet(sr, (uint8_t*)ethernet_header, total_len, interface->name);
+  free(arp_packet);
+  free(ethernet_header);
   if (result) {
     return 2;
   }
@@ -255,81 +257,28 @@ int sr_handle_arp_reply(struct sr_instance* sr,
   uint8_t* packet /*lent*/,
   unsigned int len,
   char* interface_name /*lent*/) {
+  /* Get arp header and packet interface. */
   sr_arp_hdr_t* arp_header = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
   struct sr_if* interface = sr_get_interface(sr, interface_name);
-  uint16_t target_ip_h = ntohl(arp_header->ar_tip);
 
-  if (interface->ip != target_ip_h) {
-    /* TODO packet not meant for us, maybe just drop it? */
+  /* Get target, source and interface ip. */
+  uint32_t target_ip_h = ntohl(arp_header->ar_tip);
+  uint32_t source_ip_h = ntohl(arp_header->ar_sip);
+  uint32_t interface_ip_h = ntohl(interface->ip);
+
+  /* Drop packet if not for us. */
+  if (interface_ip_h != target_ip_h) {
     return 10;
   }
 
-  /* TODO arp meant for us*/
-  struct sr_arpreq* arp_request = sr_arpcache_insert(&(sr->cache), arp_header->ar_sha, target_ip_h);
+  /* Add new arp record in arp cache entry. */
+  struct sr_arpreq* arp_request = sr_arpcache_insert(&(sr->cache), arp_header->ar_sha, source_ip_h);
   if (arp_request != NULL) {
-    int result = forward_ip_packet_for_arp_reply(sr, arp_request);
-    if (result) {
-      return result;
-    }
-    sr_arpreq_destroy(&(sr->cache), arp_request);
+    Debug("Arp record already exists.\n");
+    free(arp_request);
+    return 0;
   }
-  return 0;
-}
-
-int forward_ip_packet_for_arp_reply(struct sr_instance* sr,
-  struct sr_arpreq* arp_request) {
-  /* get arp entry of the matching ip */
-  struct sr_arpentry* arp_entry = sr_arpcache_lookup(&(sr->cache), arp_request->ip);
-  if (arp_entry == NULL) {
-    /* TODO cache got deleted in the middle, abort abort!!! */
-    return 10;
-  }
-  struct sr_rt* routing_entry = longest_prefix_match(sr, arp_request->ip);
-  if (routing_entry == NULL) {
-    /* TODO No Routing */
-    free(arp_entry);
-    return 20;
-  }
-  struct sr_if* exit_interface = sr_get_interface(sr, routing_entry->interface);
-  if (exit_interface == NULL) {
-    /* TODO NO exit interface*/
-    free(arp_entry);
-    return 30;
-  }
-
-  struct sr_packet* packet = arp_request->packets;
-  while (packet != NULL) {
-
-    /* Allocate for packet */
-    uint8_t* combined_packet = (uint8_t*)calloc(1, packet->len);
-    if (combined_packet == NULL) {
-      free(arp_entry);
-      return 1;
-    }
-    /* Divide into blocks */
-    sr_ethernet_hdr_t* ethernet_header = (sr_ethernet_hdr_t*)combined_packet;
-    sr_ip_hdr_t* ip_header = (sr_ip_hdr_t*)(combined_packet + sizeof(sr_ethernet_hdr_t));
-
-    /* Copy value */
-    memcpy(combined_packet, packet->buf, packet->len);
-
-    memcpy(ethernet_header->ether_shost, exit_interface->addr, ETHER_ADDR_LEN);
-    memcpy(ethernet_header->ether_dhost, arp_entry->mac, ETHER_ADDR_LEN);
-
-    /*========================================*/
-    /* TODO do I handle TTL here? or earlier? */
-    /*========================================*/
-
-    int result = sr_send_packet(sr, combined_packet, packet->len, exit_interface->name);
-
-    if (result) {
-      free(arp_entry);
-      return 2;
-    }
-    free(combined_packet);
-    packet = packet->next;
-  }
-  free(arp_entry);
+  Debug("Arp record added success.\n");
   return 0;
 }
 

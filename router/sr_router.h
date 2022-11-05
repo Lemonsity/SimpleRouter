@@ -88,8 +88,6 @@ int send_icmp_unreachable_or_timeout(struct sr_instance* sr,
   char* interface,
   uint8_t icmp_type,
   uint8_t icmp_code);
-int forward_ip_packet(struct sr_instance* sr,
-  struct sr_arpreq* arp_request);
 void decrement_ttl(sr_ip_hdr_t* ip_header);
 uint8_t validate_ip_checksum(sr_ip_hdr_t* ip_header);
 struct sr_rt* longest_prefix_match(struct sr_instance* sr, uint32_t dest_ip_n);
