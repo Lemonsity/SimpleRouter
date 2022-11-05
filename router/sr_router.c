@@ -202,39 +202,22 @@ void sr_handle_ip_packet(struct sr_instance *sr /*lent*/,
     return;
   }
   /* TODO forward packet */
-  sr_handle_ip_packet_forwarding(sr, packet, len, curr_interface);
-}
+  struct sr_if *temp_interface = longest_prefix_match(sr, ip_header);
 
-void decrement_ttl(sr_ip_hdr_t *ip_header)
-{
-  ip_header->ip_ttl--;
-  /* TODO update checksum*/
-}
+  /* if longest_prefix_match can find one interface to match */
+  if (temp_interface != NULL)
+  {
+    printf("matched with one of table. Check ARP cache.\n");
 
-/*---------------------
- * validate_ip_checksum
- * Given a ip_header, calculate its checksum
- * If the checksum is valid, the function should return 0
- * If return non-zero, it indicated the checksum is not valid
------------------------*/
-/*
-uint8_t validate_ip_checksum(sr_ip_hdr_t *ip_header)
-{
-  uint32_t sum = 0;
-  uint16_t *address = ip_header;
-  int i = 0;
-  for (; i < 10; i++)
-  {
-    sum += *address;
-    address++;
+    sr_arpcache_queuereq(&sr->cache, ip_header->ip_dst, packet, len, temp_interface->name);
   }
-  while (sum >> 16)
+  /* if longest_prefix_match can NOT find one interface to match */
+  else
   {
-    sum = (sum & 0xFFFF) + (sum >> 16);
+    printf("Did not match with table, Destination net unreachable(type 3,code 0)");
+    send_icmp_unreachable_or_timeout(sr, packet, len, interface, 0x00, 0x03);
   }
-  return ~sum;
 }
-*/
 
 struct sr_if *longest_prefix_match(struct sr_instance *sr, sr_ip_hdr_t *ip_header)
 {
@@ -252,47 +235,4 @@ struct sr_if *longest_prefix_match(struct sr_instance *sr, sr_ip_hdr_t *ip_heade
     curr_table_row = curr_table_row->next;
   }
   return temp_interface;
-}
-
-void sr_handle_ip_packet_forwarding(struct sr_instance *sr, uint8_t *packet,
-                                    unsigned int len, struct sr_if *interface)
-{
-  sr_ip_hdr_t *ip_header = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-  sr_ethernet_hdr_t *ethernet_header = (sr_ethernet_hdr_t *)packet;
-
-  struct sr_if *temp_interface = longest_prefix_match(sr, ip_header);
-
-  /* if longest_prefix_match can find one interface to match */
-  if (temp_interface != NULL)
-  {
-    printf("matched with one of table. Check ARP cache.\n");
-
-    struct sr_arpentry *hitted = sr_arpcache_lookup(&sr->cache, ip_header->ip_dst);
-
-    /* hitted cache */
-    if (hitted != NULL)
-    {
-      printf("hitted ARP cache, send packet to next hop\n");
-      memcpy(ethernet_header->ether_dhost, hitted->mac, ETHER_ADDR_LEN);
-      memcpy(ethernet_header->ether_shost, temp_interface->addr, ETHER_ADDR_LEN);
-      ip_header->ip_sum = 0;
-      ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
-      sr_send_packet(sr, packet, len, temp_interface->name);
-      free(hitted);
-    }
-    /* NOT hitted cache */
-    else
-    {
-      printf("NOT hitted ARP cache, send ARP request\n");
-      struct sr_arpreq *request = sr_arpcache_queuereq(&sr->cache, ip_header->ip_dst,
-                                                       packet, len, temp_interface->name);
-      handle_arpreq(sr, request);
-    }
-  }
-  /* if longest_prefix_match can NOT find one interface to match */
-  else
-  {
-    printf("Did not match with table, Destination net unreachable(type 3,code 0)");
-    send_icmp_unreachable_or_timeout(sr, packet, len, interface, 0x00, 0x03);
-  }
 }
