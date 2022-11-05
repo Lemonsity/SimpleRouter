@@ -202,7 +202,7 @@ int sr_handle_arp_req(struct sr_instance* sr,
 
   /* If added success, send arp require packet. */
   if (arp_req != NULL) {
-    int result = send_arp_req(sr, packet, len, interface_name);
+    int result = send_back_arp_req(sr, packet, len, interface_name);
     free(arp_req);
     if (result) {
       return result;
@@ -211,7 +211,7 @@ int sr_handle_arp_req(struct sr_instance* sr,
   return 0;
 }
 
-int send_arp_req(struct sr_instance* sr,
+int send_back_arp_req(struct sr_instance* sr,
   uint8_t* packet /*lent*/,
   unsigned int len,
   char* interface_name /*lent*/) {
@@ -221,7 +221,7 @@ int send_arp_req(struct sr_instance* sr,
 
   /* Create Ethernet and ARP packet */
   sr_ethernet_hdr_t* ethernet_header;
-  sr_arp_hdr_t* arp_packet;
+  sr_arp_hdr_t* arp_packet = (sr_arp_hdr_t*)malloc(sizeof(sr_arp_hdr_t));
   unsigned int total_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
   ethernet_header = (sr_ethernet_hdr_t *)malloc(total_len);
 
@@ -244,7 +244,7 @@ int send_arp_req(struct sr_instance* sr,
     (uint8_t*)arp_packet, sizeof(sr_arp_hdr_t));
 
   /* Send arp req packet and return the result. */
-  int result = sr_send_packet(sr, ethernet_header, total_len, interface->name);
+  int result = sr_send_packet(sr, (uint8_t*)ethernet_header, total_len, interface->name);
   if (result) {
     return 2;
   }

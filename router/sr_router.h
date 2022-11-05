@@ -70,7 +70,14 @@ void sr_handle_arp_packet(struct sr_instance* sr,
   uint8_t* packet /*lent*/,
   unsigned int len,
   char* interface_name /*lent*/);
-int sr_handle_arp_req();
+int sr_handle_arp_req(struct sr_instance* sr,
+  uint8_t* packet /*lent*/,
+  unsigned int len,
+  char* interface_name /*lent*/);
+int send_back_arp_req(struct sr_instance* sr,
+  uint8_t* packet /*lent*/,
+  unsigned int len,
+  char* interface_name /*lent*/);
 int sr_handle_arp_reply(struct sr_instance* sr,
   uint8_t* packet /*lent*/,
   unsigned int len,
