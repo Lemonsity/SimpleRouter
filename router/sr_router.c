@@ -164,16 +164,17 @@ void sr_handle_arp_packet(struct sr_instance* sr,
   uint8_t* packet /*lent*/,
   unsigned int len,
   char* interface_name /*lent*/) {
+  /* Get arp header and opcode. */
   sr_arp_hdr_t* arp_header = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
   uint16_t op = ntohs(arp_header->ar_op);
-  int result = 0;
   if (op == arp_op_request) {
-    result = sr_handle_arp_req(sr, packet, len, interface_name);
+    int result = sr_handle_arp_req(sr, packet, len, interface_name);
+    Debug("sr_handle_arp_req result is %d. \n", result);
   } else if (op == arp_op_reply) {
-    result = sr_handle_arp_reply(sr, packet, len, interface_name);
+    int result = sr_handle_arp_reply(sr, packet, len, interface_name);
+    Debug("sr_handle_arp_reply result is %d. \n", result);
   } else {
-    /* TODO unknown arp op */
-
+    Debug("Unknown arp op %d. \n", op);
   }
 }
 
@@ -242,6 +243,7 @@ int send_arp_req(struct sr_instance* sr,
   memcpy(((uint8_t*)ethernet_header) + sizeof(sr_ethernet_hdr_t),
     (uint8_t*)arp_packet, sizeof(sr_arp_hdr_t));
 
+  /* Send arp req packet and return the result. */
   int result = sr_send_packet(sr, ethernet_header, total_len, interface->name);
   if (result) {
     return 2;
