@@ -17,16 +17,36 @@
   See the comments in the header file for an idea of what it should look like.
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
-    /* Fill this in */
-    /* TODO this function needs to be completed */
+    /* Get arp cache and cache requests. */
     struct sr_arpcache cache = sr -> cache;
-    struct sr_arpreq * req = sr -> cache.requests;
-    while (req != NULL) {
-        struct sr_arpreq * temp = req; /* Handle arpreq can potentially free the pointer */
-        req = req->next;
-        handle_arpreq(sr, temp);
-    } 
+    struct sr_arpreq * head = sr -> cache.requests;
+    while (head != NULL) {
+        /* Get retieved req. */
+        struct sr_arpreq * req = head; /* Handle arpreq can potentially free the pointer */
+        uint32_t ip = req -> ip;
+        head = head -> next;
 
+        /* Check if the req ip is in arp table. */
+        struct sr_arpentry * cached_value = sr_arpcache_lookup(&cache, ip);
+
+        /* Did not found match in arp table. */
+        if (cached_value == NULL) {
+            /* Did not found match in arp table. */
+            handle_arpreq(sr, req);
+        } else { /* Found match in arp table. */
+            int result = forward_ip_packet(sr, req);
+            if (!result) {
+              sr_arpreq_destroy(&(cache), req);
+            }
+            free(req);
+            free(cached_value);
+        }
+    }
+}
+
+int forward_ip_packet(struct sr_instance* sr,
+  struct sr_arpreq* arp_request) {
+    return -1;
 }
 
 void handle_arpreq(struct sr_instance* sr, struct sr_arpreq * req) {
