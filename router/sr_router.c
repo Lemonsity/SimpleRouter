@@ -211,30 +211,38 @@ int sr_handle_arp_req(struct sr_instance* sr,
 }
 
 int send_arp_req(struct sr_instance* sr,
-  struct sr_arpentry* arp_req,
+  uint8_t* packet /*lent*/,
+  unsigned int len,
   char* interface_name /*lent*/) {
-  /* get packet interface */
+  /* Get arp header and packet interface */
+  sr_arp_hdr_t* arp_header = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
   struct sr_if* interface = sr_get_interface(sr, interface_name);
 
-  /* Allocate packet */
-  uint8_t* combined_packet = (uint8_t*)calloc(1, ETHER_ADDR_LEN);
-  
-  /* Divide into blocks */
-  sr_ethernet_hdr_t* ethernet_header = (sr_ethernet_hdr_t*)combined_packet;
-  sr_ip_hdr_t* ip_header = (sr_ip_hdr_t*)(combined_packet + sizeof(sr_ethernet_hdr_t));
+  /* Create Ethernet and ARP packet */
+  sr_ethernet_hdr_t* ethernet_header;
+  sr_arp_hdr_t* arp_packet;
+  unsigned int total_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+  ethernet_header = (sr_ethernet_hdr_t *)malloc(total_len);
 
-  /* Copy value */
-  memcpy(combined_packet, interface->addr, ETHER_ADDR_LEN);
+  /* Copy ARP value */
+  arp_packet->ar_hrd = ntohs(arp_hrd_ethernet);
+  arp_packet->ar_pro = ntohs(ethertype_ip);
+  arp_packet->ar_hln = ETHER_ADDR_LEN;
+  arp_packet->ar_pln = 4;
+  arp_packet->ar_op = ntohs(arp_op_reply);
+  memcpy(arp_packet->ar_sha, interface->addr, ETHER_ADDR_LEN);
+  arp_packet->ar_sip = interface->ip;
+  memcpy(arp_packet->ar_tha, arp_header->ar_sha, ETHER_ADDR_LEN);
+  arp_packet->ar_tip = arp_header->ar_sip;
 
+  /* Copy Ethernet value */
   memcpy(ethernet_header->ether_shost, interface->addr, ETHER_ADDR_LEN);
-  memcpy(ethernet_header->ether_dhost, arp_req->mac, ETHER_ADDR_LEN);
+  memcpy(ethernet_header->ether_dhost, arp_header->ar_sha, ETHER_ADDR_LEN);
+  ethernet_header->ether_type = ntohs(ethertype_arp);
+  memcpy(((uint8_t*)ethernet_header) + sizeof(sr_ethernet_hdr_t),
+    (uint8_t*)arp_packet, sizeof(sr_arp_hdr_t));
 
-  /*========================================*/
-  /* TODO do I handle TTL here? or earlier? */
-  /*========================================*/
-
-  int result = sr_send_packet(sr, combined_packet, ETHER_ADDR_LEN, interface->name);
-  free(combined_packet);
+  int result = sr_send_packet(sr, ethernet_header, total_len, interface->name);
   if (result) {
     return 2;
   }
