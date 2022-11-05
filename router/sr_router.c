@@ -76,26 +76,26 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(packet);
   assert(interface);
 
+  /* Reminder when receiving packages. */
   printf("*** -> Received packet of length %d \n", len);
 
-  /* fill in code here */
-  /* TODO This function needs to be completed */
+  /* Don't waste my time ... */
   if (len < sizeof(sr_ethernet_hdr_t)) {
-    /* TODO packet too short to be ethernet */
+    fprintf(stderr , "** Error: packet is wayy to short \n");
+      return;
   }
-  sr_ethernet_hdr_t* ethernet_header = (sr_ethernet_hdr_t*)packet;
 
   /* Control flow for different ethernet protocol */
-  if (ethernet_header->ether_type == htons(ethertype_ip)
+  if (ethertype(packet) == ethertype_ip
     && len >= sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)) {
     sr_handle_ip_packet(sr, packet, len, interface);
-  } else if (ethernet_header->ether_type == htons(ethertype_arp)
+  } else if (ethertype(packet) == ethertype_arp
     && len >= sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t)) {
     sr_handle_arp_packet(sr, packet, len, interface);
   } else {
-    /* TODO not ip or arp */
+    Debug("Unknown ethernet type %d. \n", ethertype(packet));
   }
-}/* end sr_ForwardPacket */
+}
 
 /*-------------------------------------------------
  * One should make sure that the packet is indeed an IP packet before calling
