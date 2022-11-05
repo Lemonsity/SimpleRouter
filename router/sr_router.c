@@ -184,7 +184,7 @@ void sr_handle_ip_packet(struct sr_instance *sr /*lent*/,
         {
           printf("this package is TCP/UDP packet\n");
           /* Base on current teammate function call, MAY need to change arguments */
-          send_icmp_unreachable_or_timeout(sr, packet, len, curr_interface, 0x03, 0x03);
+          send_icmp_unreachable_or_timeout(sr, packet, len, curr_interface->name, 0x03, 0x03);
         }
         return;
       }
@@ -200,7 +200,7 @@ void sr_handle_ip_packet(struct sr_instance *sr /*lent*/,
   {
     /* TODO TTL error, Time exceeded (type 11, code 0) */
     printf("ip packet Time exceeded (type 11, code 0)\n");
-    send_icmp_unreachable_or_timeout(sr, packet, len, curr_interface, 0x00, 0x11);
+    send_icmp_unreachable_or_timeout(sr, packet, len, curr_interface->name, 0x00, 0x11);
     return;
   }
   /* TODO forward packet */
