@@ -89,8 +89,6 @@ void sr_handlepacket(struct sr_instance *sr,
       return;
   }
 
-  sr_arpcache_dump(&(sr->cache));
-
   /* Control flow for different ethernet protocol */
   if (ethertype(packet) == ethertype_ip
     && len >= sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)) {
