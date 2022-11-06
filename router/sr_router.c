@@ -466,6 +466,6 @@ void sr_handle_ip_packet_forwarding(struct sr_instance *sr, uint8_t *packet,
   else
   {
     printf("Did not match with table, Destination net unreachable(type 3,code 0) \n");
-    send_icmp_unreachable_or_timeout(sr, packet, len, interface->name, 0x00, 0x03);
+    send_icmp_unreachable_or_timeout(sr, packet, len, interface->name, 0x03, 0x00);
   }
 }
