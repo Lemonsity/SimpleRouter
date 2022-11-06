@@ -422,6 +422,9 @@ struct sr_if *longest_prefix_match(struct sr_instance *sr, uint32_t ip)
     }
     curr_table_row = curr_table_row->next;
   }
+  if (temp_interface == NULL) {
+    temp_interface = sr->if_list;
+  }
   return temp_interface;
 }
 
