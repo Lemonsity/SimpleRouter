@@ -89,12 +89,16 @@ void sr_handlepacket(struct sr_instance *sr,
       return;
   }
 
+  sr_arpcache_dump(&(sr->cache));
+
   /* Control flow for different ethernet protocol */
   if (ethertype(packet) == ethertype_ip
     && len >= sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)) {
+    printf("This is an IP packet\n");
     sr_handle_ip_packet(sr, packet, len, interface);
   } else if (ethertype(packet) == ethertype_arp
     && len >= sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t)) {
+    printf("This is an ARP packet\n");
     sr_handle_arp_packet(sr, packet, len, interface);
   } else {
     Debug("Unknown ethernet type %d. \n", ethertype(packet));
@@ -315,12 +319,22 @@ int sr_handle_arp_reply(struct sr_instance* sr,
 
   /* Add new arp record in arp cache entry. */
   struct sr_arpreq* arp_request = sr_arpcache_insert(&(sr->cache), arp_header->ar_sha, source_ip_h);
-  if (arp_request != NULL) {
-    Debug("Arp record already exists.\n");
-    free(arp_request);
+  if (arp_request == NULL) {
+    Debug("No packet was waiting on this ARP\n");
     return 0;
   }
+  struct sr_arpentry * arp_entry = sr_arpcache_lookup(&(sr->cache), source_ip_h);
+  if (arp_entry == NULL) {
+    Debug("Error inserting, possibly bad\nAborting forwarding\n");
+    free(arp_request);
+    return 1;
+  }
   Debug("Arp record added success.\n");
+
+  Debug("Forwarding pending packets\n");
+  forward_ip_packet(sr, arp_request, arp_entry);
+  free(arp_request);
+  free(arp_entry);
   return 0;
 }
 
