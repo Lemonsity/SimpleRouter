@@ -196,6 +196,7 @@ void sr_handle_ip_packet(struct sr_instance *sr /*lent*/,
   if (ip_header->ip_ttl == 0)
   {
     /* TODO TTL error, Time exceeded (type 11, code 0) */
+    ip_header->ip_ttl += 1;
     printf("ip packet Time exceeded (type 11, code 0)\n");
     send_icmp_unreachable_or_timeout(sr, packet, len, interface, 0x0b, 0x00);
     return;
@@ -361,17 +362,17 @@ int send_icmp_unreachable_or_timeout(struct sr_instance* sr,
   /* Assume 8 bytes of data */
   int real_icmp_data_size = ICMP_DATA_SIZE;
   /* IP actually have less then 8 bytes*/
-  if (len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t) < real_icmp_data_size) {
+  if (len - sizeof(sr_ethernet_hdr_t) < real_icmp_data_size) {
     /* Datagram only contains `real_icmp_data_size` bytes of "non-header" data */
-    real_icmp_data_size = len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t);
+    real_icmp_data_size = len - sizeof(sr_ethernet_hdr_t);
   }
   uint8_t* blank = (uint8_t*)calloc(1, ICMP_DATA_SIZE);
   /* Copy the non-header data into blank */
-  memcpy(blank, buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), real_icmp_data_size);
+  memcpy(blank, buf + sizeof(sr_ethernet_hdr_t), real_icmp_data_size);
   memcpy(icmp_header->data, blank, ICMP_DATA_SIZE);
   free(blank);
 
-  uint16_t sum = cksum(icmp_header, sizeof(sr_icmp_t3_hdr_t));
+  uint16_t sum = cksum(icmp_header, sizeof(sr_icmp_hdr_t));
   icmp_header->icmp_sum = sum;
 
   /* Fille IP */
@@ -384,7 +385,7 @@ int send_icmp_unreachable_or_timeout(struct sr_instance* sr,
   ip_header->ip_ttl = INIT_TTL;
   ip_header->ip_p = ip_protocol_icmp;
   ip_header->ip_sum = 0;
-  ip_header->ip_src = htonl(sr_get_interface(sr, interface)->ip);
+  ip_header->ip_src = sr_get_interface(sr, interface)->ip;
   ip_header->ip_dst = original_ip_header->ip_src;
   ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
 
@@ -394,14 +395,15 @@ int send_icmp_unreachable_or_timeout(struct sr_instance* sr,
   eth_header->ether_type = htons(ethertype_ip);
 
   /* combine back into one */
-  uint8_t* combined_packet = calloc(1, sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
+  uint8_t* combined_packet = calloc(1, sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t));
   memcpy(combined_packet, eth_header, sizeof(sr_ethernet_hdr_t));
   memcpy(combined_packet + sizeof(sr_ethernet_hdr_t), ip_header, sizeof(sr_ip_hdr_t));
-  memcpy(combined_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), eth_header, sizeof(sr_icmp_hdr_t));
+  memcpy(combined_packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), icmp_header, sizeof(sr_icmp_t3_hdr_t));
+  
   free(eth_header);
   free(ip_header);
   free(icmp_header);
-  int result = sr_send_packet(sr, combined_packet, sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t), interface);
+  int result = sr_send_packet(sr, combined_packet, sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t), interface);
   free(combined_packet);
 
   return result;
