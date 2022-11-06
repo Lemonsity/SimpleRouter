@@ -197,7 +197,7 @@ void sr_handle_ip_packet(struct sr_instance *sr /*lent*/,
   {
     /* TODO TTL error, Time exceeded (type 11, code 0) */
     printf("ip packet Time exceeded (type 11, code 0)\n");
-    send_icmp_unreachable_or_timeout(sr, packet, len, interface, 0x00, 0x11);
+    send_icmp_unreachable_or_timeout(sr, packet, len, interface, 0x11, 0x00);
     return;
   }
   /* TODO forward packet */
