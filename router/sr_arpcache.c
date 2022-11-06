@@ -19,7 +19,6 @@
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
     /* Get arp cache and cache requests. */
-    struct sr_arpcache cache = sr -> cache;
     struct sr_arpreq * head = sr -> cache.requests;
     while (head != NULL) {
         /* Get retieved req. */
@@ -28,7 +27,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
         head = head -> next;
 
         /* Check if the req ip is in arp table. */
-        struct sr_arpentry * cached_value = sr_arpcache_lookup(&cache, ip);
+        struct sr_arpentry * cached_value = sr_arpcache_lookup(&(sr -> cache), ip);
 
         /* Did not found match in arp table. */
         if (cached_value == NULL) {
@@ -37,9 +36,10 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
         } else { /* Found match in arp table. */
             int result = forward_ip_packet(sr, req, cached_value);
             if (!result) {
-              sr_arpreq_destroy(&(cache), req);
+                sr_arpreq_destroy(&(sr -> cache), req);
+            } else {
+                free(req);
             }
-            free(req);
             free(cached_value);
         }
     }
@@ -53,25 +53,20 @@ int forward_ip_packet(struct sr_instance* sr,
     struct sr_packet *packets = arp_request->packets;
     while (packets != NULL) {
         /* Get packet interface. */
-        struct sr_if* interface = sr_get_interface(sr, packets->iface);
+        struct sr_if* interface = longest_prefix_match(sr, arp_request->ip);
 
         /* Get Ethernet header */
         sr_ethernet_hdr_t* ethernet_header = (sr_ethernet_hdr_t*) packets->buf;
+        sr_ip_hdr_t* ip_header = (sr_ip_hdr_t*)(packets->buf + sizeof(sr_ethernet_hdr_t));
         /* Add destination and source ethernet address */
         memcpy(ethernet_header->ether_dhost, target->mac, ETHER_ADDR_LEN);
         memcpy(ethernet_header->ether_shost, interface->addr, ETHER_ADDR_LEN);
-
-        /* Get IP header */
-        sr_ip_hdr_t* ip_header = (sr_ip_hdr_t*)(packets->buf + sizeof(sr_ethernet_hdr_t));
-        /* Update TTL and check sum */
-        ip_header->ip_ttl--;
+        ip_header->ip_sum = 0;
         ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
 
         /* Send packet. */
-        result = result + sr_send_packet(sr, packets->buf, packets->len, packets->iface);
-        struct sr_packet *temp = packets;
+        result = result + sr_send_packet(sr, packets->buf, packets->len, interface->name);
         packets = packets->next;
-        free(temp);
     }
     return result;
 }
@@ -92,8 +87,10 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq * req) {
             sr_arpreq_destroy(&(sr->cache), req);
         }
         else {
+            /* Get packet interface. */
+            struct sr_if* interface = longest_prefix_match(sr, req->ip);
             /* Sent arp req. */
-            sr_send_arp_request(sr, longest_prefix_match(sr, req->ip)->name, req->ip);
+            sr_send_arp_request(sr, interface->name, req->ip);
             req->sent = time(NULL);
             req->times_sent++;
         }
@@ -120,12 +117,17 @@ int sr_send_arp_request(struct sr_instance * sr,
     arp_packet->ar_op = ntohs(arp_op_request);
     memcpy(arp_packet->ar_sha, interface->addr, ETHER_ADDR_LEN);
     arp_packet->ar_sip = interface->ip;
-    memcpy(arp_packet->ar_tha, htons(0), ETHER_ADDR_LEN);
+    int i;
+    for(i=0;i<ETHER_ADDR_LEN;i++) {
+        arp_packet->ar_tha[i] = 0x00;
+    }
     arp_packet->ar_tip = target_ip;
 
     /* Create Ethernet value */
     memcpy(ethernet_header->ether_shost, interface->addr, ETHER_ADDR_LEN);
-    memcpy(ethernet_header->ether_dhost, htons(0xffffff), ETHER_ADDR_LEN);
+    for(i=0;i<ETHER_ADDR_LEN;i++) {
+        ethernet_header->ether_dhost[i] = 0xff;
+    }
     ethernet_header->ether_type = ntohs(ethertype_arp);
     memcpy(((uint8_t*)ethernet_header) + sizeof(sr_ethernet_hdr_t),
     (uint8_t*)arp_packet, sizeof(sr_arp_hdr_t));

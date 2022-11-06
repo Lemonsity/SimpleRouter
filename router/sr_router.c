@@ -155,7 +155,7 @@ void sr_handle_ip_packet(struct sr_instance *sr /*lent*/,
           printf("the icmp packet type is echo.\n");
 
           /* find interface by longest prefix match */
-          struct sr_if *temp_interface = longest_prefix_match(sr, ip_header);
+          struct sr_if *temp_interface = longest_prefix_match(sr, ip_header->ip_src);
 
           /* Change ethernet header info */
           memcpy(ethernet_header->ether_dhost, ethernet_header->ether_shost, ETHER_ADDR_LEN);
@@ -183,8 +183,8 @@ void sr_handle_ip_packet(struct sr_instance *sr /*lent*/,
         }
         return;
       }
-      curr_interface = curr_interface->next;
     }
+    curr_interface = curr_interface->next;
   }
 
   /* if this package NOT belong to my route. */
@@ -199,20 +199,7 @@ void sr_handle_ip_packet(struct sr_instance *sr /*lent*/,
     return;
   }
   /* TODO forward packet */
-  struct sr_if *temp_interface = longest_prefix_match(sr, ip_header);
-
-  /* if longest_prefix_match can find one interface to match */
-  if (temp_interface != NULL)
-  {
-    printf("matched with one of table. Check ARP cache.\n");
-    sr_arpcache_queuereq(&sr->cache, ip_header->ip_dst, packet, len, temp_interface->name);
-  }
-  /* if longest_prefix_match can NOT find one interface to match */
-  else
-  {
-    printf("Did not match with table, Destination net unreachable(type 3,code 0)");
-    send_icmp_unreachable_or_timeout(sr, packet, len, interface, 0x00, 0x03);
-  }
+  sr_handle_ip_packet_forwarding(sr, packet, len, curr_interface);
 }
 
 void sr_handle_arp_packet(struct sr_instance* sr,
@@ -242,9 +229,9 @@ int sr_handle_arp_req(struct sr_instance* sr,
   struct sr_if* interface = sr_get_interface(sr, interface_name);
 
   /* Get target, source and interface ip. */
-  uint32_t target_ip_h = ntohl(arp_header->ar_tip);
-  uint32_t source_ip_h = ntohl(arp_header->ar_sip);
-  uint32_t interface_ip_h = ntohl(interface->ip);
+  uint32_t target_ip_h = arp_header->ar_tip;
+  uint32_t source_ip_h = arp_header->ar_sip;
+  uint32_t interface_ip_h = interface->ip;
 
   /* Drop packet if not for us. */
   if (interface_ip_h != target_ip_h) {
@@ -317,9 +304,9 @@ int sr_handle_arp_reply(struct sr_instance* sr,
   struct sr_if* interface = sr_get_interface(sr, interface_name);
 
   /* Get target, source and interface ip. */
-  uint32_t target_ip_h = ntohl(arp_header->ar_tip);
-  uint32_t source_ip_h = ntohl(arp_header->ar_sip);
-  uint32_t interface_ip_h = ntohl(interface->ip);
+  uint32_t target_ip_h = arp_header->ar_tip;
+  uint32_t source_ip_h = arp_header->ar_sip;
+  uint32_t interface_ip_h = interface->ip;
 
   /* Drop packet if not for us. */
   if (interface_ip_h != target_ip_h) {
@@ -408,7 +395,7 @@ int send_icmp_unreachable_or_timeout(struct sr_instance* sr,
   return result;
 }
 
-struct sr_if *longest_prefix_match(struct sr_instance *sr, sr_ip_hdr_t *ip_header)
+struct sr_if *longest_prefix_match(struct sr_instance *sr, uint32_t ip)
 {
   struct sr_if *temp_interface = NULL;
 
@@ -416,7 +403,7 @@ struct sr_if *longest_prefix_match(struct sr_instance *sr, sr_ip_hdr_t *ip_heade
   while (curr_table_row != NULL)
   {
     /* find the longest prefix match */
-    uint32_t masked = curr_table_row->mask.s_addr & ip_header->ip_src;
+    uint32_t masked = curr_table_row->mask.s_addr & ip;
     if (masked == curr_table_row->dest.s_addr)
     {
       temp_interface = sr_get_interface(sr, curr_table_row->interface);
@@ -424,4 +411,46 @@ struct sr_if *longest_prefix_match(struct sr_instance *sr, sr_ip_hdr_t *ip_heade
     curr_table_row = curr_table_row->next;
   }
   return temp_interface;
+}
+
+void sr_handle_ip_packet_forwarding(struct sr_instance *sr, uint8_t *packet,
+                                    unsigned int len, struct sr_if *interface)
+{
+  sr_ip_hdr_t *ip_header = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+  sr_ethernet_hdr_t *ethernet_header = (sr_ethernet_hdr_t *)packet;
+
+  struct sr_if *temp_interface = longest_prefix_match(sr, ip_header->ip_dst);
+
+  /* if longest_prefix_match can find one interface to match */
+  if (temp_interface != NULL)
+  {
+    printf("matched with one of table. Check ARP cache.\n");
+
+    struct sr_arpentry *hitted = sr_arpcache_lookup(&(sr->cache), ip_header->ip_dst);
+
+    /* hitted cache */
+    if (hitted != NULL)
+    {
+      printf("hitted ARP cache, send packet to next hop\n");
+      memcpy(ethernet_header->ether_dhost, hitted->mac, ETHER_ADDR_LEN);
+      memcpy(ethernet_header->ether_shost, temp_interface->addr, ETHER_ADDR_LEN);
+      ip_header->ip_sum = 0;
+      ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
+      sr_send_packet(sr, packet, len, temp_interface->name);
+      free(hitted);
+    }
+    /* NOT hitted cache */
+    else
+    {
+      printf("NOT hitted ARP cache, send ARP request\n");
+      sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst,
+        packet, len, temp_interface->name);
+    }
+  }
+  /* if longest_prefix_match can NOT find one interface to match */
+  else
+  {
+    printf("Did not match with table, Destination net unreachable(type 3,code 0) \n");
+    send_icmp_unreachable_or_timeout(sr, packet, len, interface->name, 0x00, 0x03);
+  }
 }
