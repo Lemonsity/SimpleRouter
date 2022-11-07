@@ -52,16 +52,19 @@ Youzhang Sun:
     - Finer implementation of handling ARP packets
     - If is reply, then insert ARP into cache, and forward all awaiting packets related to that IP
 
-5. `int forward_ip_packet(struct sr_instance* sr, struct sr_arpreq* arp_request)`
-    - Given an ARP request, representating the IP packets waiting on the particular ARP request, forward if the matching cache can be found
-    - (Designed to be called on receiving an ARP reply)
+5. `int sr_handle_ip_packet_forwarding(struct sr_instance *sr, uint8_t *packet, unsigned int len, struct sr_if *interface)`
+    - Given a packet to be forwarded, decided where and how its forwarded
 
 6. `int send_icmp_unreachable_or_timeout(struct sr_instance* sr, uint8_t* buf, unsigned int len, char* interface, uint8_t icmp_type, uint8_t icmp_code)`
     - Helper function
     - Given the type and code, Send out an ICMP error message
 
 7. `struct sr_if *longest_prefix_match(struct sr_instance *sr, sr_ip_hdr_t *ip_header)`
-    - FOr routing, matching IP with routing table for interface to send to
+    - For routing, matching IP with routing table for interface to send to
+
+8. `int send_back_arp_req(struct sr_instance* sr, uint8_t* packet, unsigned int len, char* interface_name )`
+    - Handle ARP request from else where
+    - prepare and send reply
 
 ### sr_arpcache.c
 1. `void sr_arpcache_sweepreqs(struct sr_instance *sr)`
