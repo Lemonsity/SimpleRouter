@@ -35,7 +35,7 @@ Youzhang Sun:
     - Determine intended destination of the packet
     - Handle ICMP and TCP/UDP if for router
     - Decrement and check TTL
-    - Forward packet ????????????????????????????????????????????????
+    - Forward packet if packet not for router
 
 3. `void sr_handle_arp_packet(struct sr_instance* sr, uint8_t* packet, unsigned int len, char* interface_name )`
     - Control flow for handling either ARP request or reply
@@ -67,3 +67,28 @@ Youzhang Sun:
 
 3. `int sr_send_arp_request(struct sr_instance * sr, char * interface_name, uint32_t target_ip)`
     - Broadcast an ARP request for the IP given to the interface given
+
+## Tests
+
+- Route packets through applicatoin servers
+    - Demonstrated via `client wget http://192.168.2.2`, `client ping server1`
+
+- Correctly handle ARP request:
+    - Demonstrated partially via CL output, and 
+    - The ability to route packets, demonstrates correct ARP request and replies must be sent and received properly (Since ARP cache always starts empty)
+
+- Correctly handle traceroute
+
+- Correctly handle ICMP Echo
+    - Demonstrated via `client ping server1`
+
+- Reject TCP/UDP via ICMP Port Unreachable
+
+- Maintain ARP cache timeout
+    - Handled by starter code
+
+- Queue waiting replies, and send out later
+    - Can be demonstrated on the first first `ping`/`traceroute` after starting mininet. Monitoring Wireshark can demonstrate that the router send out ARP requests for destination addresses (since ARP is empty to begin with). `ping` especially shows the correctness, as no `icmp_seq` would be skipped
+
+- ARP request timeout
+    - Done via implementation of `sr_arpcache_sweepreqs` function.
