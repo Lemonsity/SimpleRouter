@@ -27,12 +27,15 @@ Hongxiao Niu:
  - Control flow logic in the function `sr_handlepacket` 
  - Command line output
  - README.md file
+ 
 Lianting Wang: 
  - Major contribute about implementing handling arp package code 
  - Extensive QA, including code compatibility, debug
+ 
 Youzhang Sun: 
  - Major contribute about implementing handle arp package and arp cache code(sr_handle_arp_packet(sr, packet, len, interface))
  - Scaffolding part of `handlepacket`'s control flow 
+ - README.md
 
 ## Description and documentation for the functions that implemented the required and missed functionalities in the starter code
 
