@@ -92,3 +92,4 @@ Youzhang Sun:
 
 - ARP request timeout
     - Done via implementation of `sr_arpcache_sweepreqs` function.
+    - Can also be seen as when `client ping server1`, on the ~15th ping, the TTL is significantly greater, demonstrating a timeout, and the need to re-request for ARP cache
