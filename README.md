@@ -3,6 +3,9 @@
 ## Description
 This repository is created for assignment 3 project during lecture CSCD58 in 2022F UTSC.  
 
+## Repo
+Repository is hosted at [`https://github.com/Lemonsity/SimpleRouter/tree/feature/ping-server`](https://github.com/Lemonsity/SimpleRouter/tree/feature/ping-server). The link would bring you directly to the most up-to-date branch
+
 ## Setup
 - run `./config.sh`
 - go into `router` subdirectory, and run `make` 
