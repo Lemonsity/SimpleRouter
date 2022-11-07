@@ -3,6 +3,14 @@
 ## Description
 This repository is created for assignment 3 project during lecture CSCD58 in 2022F UTSC.  
 
+## Setup
+- run `./config.sh`
+- go into `router` subdirectory, and run `make` 
+- go back to base directory, run `./run_pox.sh` 
+- run `./run_mininet.sh` 
+- go into `router` subdirectory, and run `./sr`
+- go to mininet terminal to see router in action 
+
 ## Group Member
 | Name | utorId | Student # |
 | ---- | ------ | --------- |
